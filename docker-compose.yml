@@ -1,51 +1,53 @@
-version: '3.2'
-
+version: "3.7"
 services:
-  web:
-    image: attendize_web:latest
-    ports:
-    - "8080:80"
-    - "8081:443"
-    volumes:
-      - .:/usr/share/nginx/html
-      - .:/var/www
-    depends_on:
-      - db
-      - maildev
-      - redis
-      - worker
-    env_file:
-      - ./.env
-  worker:
-    image: attendize_worker:latest
-    depends_on:
-      - db
-      - maildev
-      - redis
-    volumes:
-      - .:/usr/share/nginx/html
-      - .:/var/www
-  db:
-    image: mysql:5.7.23
-    restart: always
-    env_file:
-      - ./.env
+  app:
+    container_name: attendize-app-dev
     environment:
-      MYSQL_ROOT_PASSWORD: "yes"
-      MYSQL_HOST: ${DB_HOST}
-      MYSQL_DATABASE: ${DB_DATABASE}
-      MYSQL_USER: ${DB_USERNAME}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
-    ports:
-      - "3306:3306"
+      - COMPOSER_MEMORY_LIMIT=-1
+    image: ejklock/php-fpm:7.4
+    networks:
+      - attendizeNetwork
+    restart: unless-stopped
     volumes:
-      - "mysql-data:/var/lib/mysql"
-  maildev:
-    image: maildev/maildev
+      - ./:/var/www/app
+      - ./docker-compose/php-fpm/custom.ini:/usr/local/etc/php/conf.d/custom.ini
+    working_dir: /var/www/app
+  db:
+    command: --default-authentication-plugin=mysql_native_password
+    container_name: attendize-dev-db
+    environment:
+      MYSQL_DATABASE: attendize
+      MYSQL_PASSWORD: attendize
+      MYSQL_ROOT_PASSWORD: attendize
+      MYSQL_USER: attendize
+      SERVICE_NAME: mysql
+      SERVICE_TAGS: dev
+    image: mysql:5.7
+    networks:
+      - attendizeNetwork
     ports:
-      - "1080:1080"
-  redis:
-    image: redis
-
+      - 33306:3306
+    restart: unless-stopped
+    tty: true
+    volumes:
+      - ./docker-compose/mysql:/docker-entrypoint-initdb.d
+      - attendizeMysqlData:/var/lib/mysql
+  nginx:
+    container_name: attendize-dev-nginx
+    image: nginx:alpine
+    networks:
+      - attendizeNetwork
+    ports:
+      - 8000:80
+    restart: unless-stopped
+    volumes:
+      - ./:/var/www/app
+      - ./docker-compose/nginx:/etc/nginx/conf.d/
+    working_dir: /var/www/app
+networks:
+  attendizeNetwork:
+    driver: bridge
 volumes:
-    mysql-data:
+  attendizeMysqlData:
+    driver: local
+    name: attendizeMysqlData
